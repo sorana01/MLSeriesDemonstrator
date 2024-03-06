@@ -51,6 +51,7 @@ public class FaceRecognitionProcessor extends VisionBaseProcessor<List<Face>> {
     public interface FaceRecognitionCallback {
         void onFaceRecognised(Face face, float probability, String name);
         void onFaceDetected(Face face, Bitmap faceBitmap, float[] vector);
+
     }
 
     private static final String TAG = "FaceRecognitionProcessor";
@@ -102,7 +103,7 @@ public class FaceRecognitionProcessor extends VisionBaseProcessor<List<Face>> {
         int height;
         if (reverseDimens) {
             width = imageProxy.getHeight();
-            height =  imageProxy.getWidth();
+            height = imageProxy.getWidth();
         } else {
             width = imageProxy.getWidth();
             height = imageProxy.getHeight();
@@ -112,50 +113,96 @@ public class FaceRecognitionProcessor extends VisionBaseProcessor<List<Face>> {
                     @Override
                     public void onSuccess(List<Face> faces) {
                         graphicOverlay.clear();
-                        for (Face face : faces) {
-                            FaceGraphic faceGraphic = new FaceGraphic(graphicOverlay, face, false, width, height);
-                            Log.d(TAG, "face found, id: " + face.getTrackingId());
-//                            if (activity != null) {
-//                                activity.setTestImage(cropToBBox(bitmap, face.getBoundingBox(), rotation));
-//                            }
-                            // now we have a face, so we can use that to analyse age and gender
-                            Bitmap faceBitmap = cropToBBox(bitmap, face.getBoundingBox(), rotation);
-
-                            if (faceBitmap == null) {
-                                Log.d("GraphicOverlay", "Face bitmap null");
-                                return;
-                            }
-
-                            TensorImage tensorImage = TensorImage.fromBitmap(faceBitmap);
-                            ByteBuffer faceNetByteBuffer = faceNetImageProcessor.process(tensorImage).getBuffer();
-                            float[][] faceOutputArray = new float[1][192];
-                            faceNetModelInterpreter.run(faceNetByteBuffer, faceOutputArray);
-
-                            Log.d(TAG, "output array: " + Arrays.deepToString(faceOutputArray));
-
+                        if (faces.isEmpty()) {
+                            // No faces were detected
+                            Log.d(TAG, "No faces found in the image.");
+                            // You can also call a method or perform an action here to signal that no faces were found
                             if (callback != null) {
-                                callback.onFaceDetected(face, faceBitmap, faceOutputArray[0]);
-                                if (!recognisedFaceList.isEmpty()) {
-                                    Pair<String, Float> result = findNearestFace(faceOutputArray[0]);
-                                    // if distance is within confidence
-                                    if (result.second < 1.0f) {
-                                        faceGraphic.name = result.first;
-                                        callback.onFaceRecognised(face, result.second, result.first);
+//                                callback.onNoFacesDetected(); // Assuming you have such a method in your callback
+                            }
+                        } else {
+                            for (Face face : faces) {
+                                FaceGraphic faceGraphic = new FaceGraphic(graphicOverlay, face, false, width, height);
+                                Log.d(TAG, "Face found, id: " + face.getTrackingId());
+                                Bitmap faceBitmap = cropToBBox(bitmap, face.getBoundingBox(), rotation);
+
+                                if (faceBitmap == null) {
+                                    Log.d("GraphicOverlay", "Face bitmap null");
+                                    return;
+                                }
+
+                                TensorImage tensorImage = TensorImage.fromBitmap(faceBitmap);
+                                ByteBuffer faceNetByteBuffer = faceNetImageProcessor.process(tensorImage).getBuffer();
+                                float[][] faceOutputArray = new float[1][192];
+                                faceNetModelInterpreter.run(faceNetByteBuffer, faceOutputArray);
+
+                                Log.d(TAG, "Output array: " + Arrays.deepToString(faceOutputArray));
+
+                                if (callback != null) {
+                                    callback.onFaceDetected(face, faceBitmap, faceOutputArray[0]);
+                                    if (!recognisedFaceList.isEmpty()) {
+                                        Pair<String, Float> result = findNearestFace(faceOutputArray[0]);
+                                        if (result.second < 1.0f) {
+                                            faceGraphic.name = result.first;
+                                            callback.onFaceRecognised(face, result.second, result.first);
+                                        }
                                     }
                                 }
-                            }
 
-                            graphicOverlay.add(faceGraphic);
+                                graphicOverlay.add(faceGraphic);
+                            }
                         }
                     }
                 })
                 .addOnFailureListener(new OnFailureListener() {
                     @Override
                     public void onFailure(@NonNull Exception e) {
-                        // intentionally left empty
+                        // Intentionally left empty
+                        Log.d(TAG, "detectInImage: error processing image");
                     }
                 });
     }
+
+
+    public void detectAndProcessStaticImage(Bitmap bitmap, FaceRecognitionCallback callback) {
+        // Create an InputImage from the Bitmap
+        InputImage inputImage = InputImage.fromBitmap(bitmap, 0); // Assuming the bitmap is correctly oriented
+
+        detector.process(inputImage)
+                .addOnSuccessListener(faces -> {
+                    graphicOverlay.clear();
+                    for (Face face : faces) {
+                        if (faces.isEmpty()) {
+                            // No faces were detected
+                            Log.d(TAG, "No faces found in the image.");
+                            return;
+                        }
+                        // Create and display the face graphic in the overlay
+                        FaceGraphic faceGraphic = new FaceGraphic(graphicOverlay, face, false, inputImage.getWidth(), inputImage.getHeight());
+                        graphicOverlay.add(faceGraphic);
+
+                        // Crop the bitmap to the face's bounding box
+                        Bitmap faceBitmap = cropToBBox(bitmap, face.getBoundingBox(), 0); // No rotation needed for static images
+                        if (faceBitmap != null) {
+                            // Process the cropped face through the face recognition model
+                            TensorImage tensorImage = TensorImage.fromBitmap(faceBitmap);
+                            ByteBuffer faceNetByteBuffer = faceNetImageProcessor.process(tensorImage).getBuffer();
+                            float[][] faceOutputArray = new float[1][192]; // Assuming size of your output array
+                            faceNetModelInterpreter.run(faceNetByteBuffer, faceOutputArray);
+
+                            // Invoke callback methods as necessary
+                            if (callback != null) {
+                                callback.onFaceDetected(face, faceBitmap, faceOutputArray[0]);
+                                // Here you can add any additional logic for face recognition or further processing
+                            }
+                        } else {
+                            Log.e(TAG, "Face bitmap is null");
+                        }
+                    }
+                })
+                .addOnFailureListener(e -> Log.e(TAG, "Failed to process bitmap for face detection.", e));
+    }
+
 
     // looks for the nearest vector in the dataset (using L2 norm)
     // and returns the pair <name, distance>
@@ -206,8 +253,11 @@ public class FaceRecognitionProcessor extends VisionBaseProcessor<List<Face>> {
         } else return null;
     }
 
-    // Register a name against the vector
+    // Register a name against the vector locally
     public void registerFace(Editable input, float[] tempVector) {
         recognisedFaceList.add(new Person(input.toString(), tempVector));
     }
+
+
+
 }

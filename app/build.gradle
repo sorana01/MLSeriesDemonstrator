@@ -5,6 +5,7 @@ plugins {
 android {
     compileSdkVersion 31
     buildToolsVersion "30.0.3"
+    ndkVersion "26.1.10909125"
 
     defaultConfig {
         applicationId "com.example.mlseriesdemonstrator"
@@ -33,6 +34,8 @@ android {
     buildFeatures {
         mlModelBinding true
     }
+
+
 }
 
 dependencies {
@@ -78,4 +81,9 @@ dependencies {
     testImplementation 'junit:junit:4.+'
     androidTestImplementation 'androidx.test.ext:junit:1.1.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
+}
+
+tasks.withType(JavaCompile) {
+    options.fork = true
+    options.forkOptions.jvmArgs += ['--add-opens', 'java.base/java.io=ALL-UNNAMED']
 }

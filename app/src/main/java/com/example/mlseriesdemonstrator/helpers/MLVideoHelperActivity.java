@@ -11,8 +11,10 @@ import android.graphics.Rect;
 import android.graphics.YuvImage;
 import android.media.Image;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Surface;
 import android.view.View;
+import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -32,8 +34,11 @@ import androidx.lifecycle.Observer;
 import com.example.mlseriesdemonstrator.R;
 import com.example.mlseriesdemonstrator.helpers.vision.GraphicOverlay;
 import com.example.mlseriesdemonstrator.helpers.vision.VisionBaseProcessor;
+import com.example.mlseriesdemonstrator.helpers.vision.recogniser.FaceRecognitionProcessor;
+import com.example.mlseriesdemonstrator.object.FaceRecognitionActivity;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.mlkit.vision.face.Face;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
@@ -46,6 +51,8 @@ public abstract class MLVideoHelperActivity extends AppCompatActivity {
     private static final int REQUEST_CAMERA = 1001;
     protected PreviewView previewView;
     protected GraphicOverlay graphicOverlay;
+
+    private Button processStaticImageButton;
     private TextView outputTextView;
     private ExtendedFloatingActionButton addFaceButton;
     private ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
@@ -63,6 +70,7 @@ public abstract class MLVideoHelperActivity extends AppCompatActivity {
         graphicOverlay = findViewById(R.id.graphic_overlay);
         outputTextView = findViewById(R.id.output_text_view);
         addFaceButton = findViewById(R.id.button_add_face);
+        processStaticImageButton = findViewById(R.id.button_process_static_image);
 
         cameraProviderFuture = ProcessCameraProvider.getInstance(getApplicationContext());
 
@@ -73,6 +81,8 @@ public abstract class MLVideoHelperActivity extends AppCompatActivity {
         } else {
             initSource();
         }
+
+
     }
 
     @Override
@@ -214,4 +224,20 @@ public abstract class MLVideoHelperActivity extends AppCompatActivity {
     public void onAddFaceClicked(View view) {
 
     }
+
+    public void enableProcessStaticImageButton() {
+        if (processStaticImageButton != null) {
+            runOnUiThread(() -> {
+                processStaticImageButton.setVisibility(View.VISIBLE);
+                processStaticImageButton.setOnClickListener(v -> {
+                    // Assuming FaceRecognitionActivity is a subclass of MLVideoHelperActivity
+                    if (this instanceof FaceRecognitionActivity) {
+                        String imagePath = "individual_photos/bill_gates/bill_gates.jpg";
+                        ((FaceRecognitionActivity) this).processStaticImage(imagePath);
+                    }
+                });
+            });
+        }
+    }
+
 }
